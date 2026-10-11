@@ -15,7 +15,6 @@
       --accent: #2563eb;
       --green: #10b981;
       --green-bg: #ecfdf5;
-      --red: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -69,30 +68,6 @@
       padding: 4px 10px;
       border-radius: 999px;
     }
-    .ip-input {
-      font-size: 0.75rem;
-      padding: 4px 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      width: 115px;
-      color: var(--text-main);
-      background: #fff;
-    }
-    .btn-reboot-icon {
-      border: none;
-      background: none;
-      cursor: pointer;
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      transition: all 0.15s ease;
-    }
-    .btn-reboot-icon:hover { color: var(--red); background: #fee2e2; }
-    
     .hero-card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -203,26 +178,24 @@
     <div class="utility-bar">
       <div class="location-tag">
         <span class="dot-live"></span>
-        <span>Delhi Weather Node</span>
+        <span>Delhi Weather Node (Cloud)</span>
       </div>
       <div class="system-pills">
-        <input type="text" id="ip-address" class="ip-input" placeholder="ESP IP" title="Target ESP32 Local IP">
         <span class="pill" id="pill-signal">Wi-Fi --</span>
         <span class="pill" id="pill-uptime">Up --</span>
-        <button class="btn-reboot-icon" onclick="rebootNode()">&#8635; Restart</button>
       </div>
     </div>
 
     <div class="hero-card">
       <div class="hero-head">
         <span class="hero-title">Current Temperature</span>
-        <span class="status-badge" id="badge-condition">Pleasant</span>
+        <span class="status-badge" id="badge-condition">Connecting...</span>
       </div>
       <div class="hero-body">
         <div class="hero-temp" id="val-temp">--&deg;C</div>
         <div class="hero-meta">
           <div class="hero-range"><span id="max-temp">--</span>&deg; / <span id="min-temp">--</span>&deg;</div>
-          <div class="hero-sub" id="sub-comfort">Connecting to station...</div>
+          <div class="hero-sub" id="sub-comfort">Syncing cloud telemetry...</div>
         </div>
       </div>
     </div>
@@ -254,11 +227,8 @@
   </div>
 
   <script>
-    const ipInput = document.getElementById('ip-address');
-    ipInput.value = localStorage.getItem('esp_target_ip') || '192.168.1.100';
-    ipInput.addEventListener('change', () => {
-      localStorage.setItem('esp_target_ip', ipInput.value.trim());
-    });
+    // Set your Firebase Database URL here (must end with /weather.json)
+    const FIREBASE_URL = "https://YOUR_PROJECT_ID.asia-southeast1.firebasedatabase.app/weather.json";
 
     const ctx = document.getElementById('trendChart').getContext('2d');
     const chart = new Chart(ctx, {
@@ -296,20 +266,19 @@
       }
     });
 
-    function fetchTelemetry() {
-      const targetIP = ipInput.value.trim();
-      if (!targetIP) return;
-
-      fetch(`http://${targetIP}/api/telemetry`)
+    function fetchCloudTelemetry() {
+      fetch(FIREBASE_URL)
         .then(res => res.json())
         .then(d => {
+          if (!d) return;
+
           document.getElementById('val-temp').innerHTML = d.temp.toFixed(1) + '&deg;C';
           document.getElementById('max-temp').innerText = d.maxTemp.toFixed(1);
           document.getElementById('min-temp').innerText = d.minTemp.toFixed(1);
           document.getElementById('badge-condition').innerText = d.comfort;
           document.getElementById('sub-comfort').innerText = d.comfortDesc;
 
-          document.getElementById('val-hum').innerText = d.hum.toFixed(0) + '%';
+          document.getElementById('val-hum').innerText = d.hum + '%';
           document.getElementById('sub-hum').innerText = d.humDesc;
 
           document.getElementById('val-batt').innerText = d.battPct + '%';
@@ -322,7 +291,7 @@
           document.getElementById('pill-uptime').innerText = 'Up ' + d.uptime;
 
           const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          if (chart.data.labels.length > 15) {
+          if (chart.data.labels.length > 20) {
             chart.data.labels.shift();
             chart.data.datasets[0].data.shift();
             chart.data.datasets[1].data.shift();
@@ -332,21 +301,11 @@
           chart.data.datasets[1].data.push(d.hum);
           chart.update();
         })
-        .catch(err => console.error("Telemetry fetch error:", err));
+        .catch(err => console.error("Firebase sync error:", err));
     }
 
-    function rebootNode() {
-      const targetIP = ipInput.value.trim();
-      if (!targetIP) return;
-      if (confirm('Reboot weather station?')) {
-        fetch(`http://${targetIP}/api/restart`, { method: 'POST' })
-          .then(() => alert('Rebooting node...'))
-          .catch(err => console.error(err));
-      }
-    }
-
-    setInterval(fetchTelemetry, 2500);
-    fetchTelemetry();
+    setInterval(fetchCloudTelemetry, 3000);
+    fetchCloudTelemetry();
   </script>
 </body>
 </html>
